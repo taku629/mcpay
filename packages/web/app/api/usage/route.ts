@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getRepository, type UsageRecord } from "@/lib/repository";
+import { verifyApiSecret } from "@/lib/secret-hash";
 
 export async function POST(request: Request) {
   const auth = request.headers.get("authorization") ?? "";
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   }
 
   const projectSecret = auth.slice("Bearer ".length);
-  if (projectSecret !== project.apiSecret) {
+  if (!verifyApiSecret(projectSecret, project.apiSecret)) {
     return NextResponse.json({ ok: false, reason: "bad_secret" }, { status: 401 });
   }
 

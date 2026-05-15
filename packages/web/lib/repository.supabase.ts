@@ -159,4 +159,38 @@ export class SupabaseRepository implements Repository {
     });
     return rows.map(mapUsage);
   }
+
+  async listAllProjects(): Promise<ProjectRecord[]> {
+    const rows = await rest<ProjectRow[]>("projects", { query: { select: "*" } });
+    return rows.map(mapProject);
+  }
+
+  async listAllCustomerKeys(): Promise<CustomerKeyRecord[]> {
+    const rows = await rest<CustomerKeyRow[]>("customer_keys", {
+      query: { select: "*", revoked_at: "is.null" },
+    });
+    return rows.map(mapKey);
+  }
+
+  async usageBetween(projectId: string, fromISO: string, toISO: string): Promise<UsageRecord[]> {
+    const rows = await rest<UsageRow[]>("usage_events", {
+      query: {
+        project_id: `eq.${projectId}`,
+        timestamp: `gte.${fromISO}`,
+        and: `(timestamp.lt.${toISO})`,
+        select: "*",
+        order: "timestamp.asc",
+      },
+    });
+    return rows.map(mapUsage);
+  }
+
+  async resetAllMonthlyConsumption(): Promise<number> {
+    const rows = await rest<CustomerKeyRow[]>("customer_keys", {
+      method: "PATCH",
+      query: { consumed_this_month_usd: "gt.0" },
+      body: JSON.stringify({ consumed_this_month_usd: 0 }),
+    });
+    return rows.length;
+  }
 }

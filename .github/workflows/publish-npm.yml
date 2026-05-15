@@ -1,0 +1,33 @@
+name: Publish @mcpay/sdk to npm
+
+on:
+  push:
+    tags:
+      - 'sdk-ts-v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # for npm provenance
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npx tsc
+      - name: Test
+        run: node --test dist/meter.test.js
+      - name: Publish
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -70,4 +70,29 @@ export class InMemoryRepository implements Repository {
       .slice(-limit)
       .reverse();
   }
+
+  async listAllProjects(): Promise<ProjectRecord[]> {
+    return Array.from(store.projects.values());
+  }
+
+  async listAllCustomerKeys(): Promise<CustomerKeyRecord[]> {
+    return Array.from(store.customerKeys.values());
+  }
+
+  async usageBetween(projectId: string, fromISO: string, toISO: string): Promise<UsageRecord[]> {
+    return store.usage.filter(
+      (u) => u.projectId === projectId && u.timestamp >= fromISO && u.timestamp < toISO,
+    );
+  }
+
+  async resetAllMonthlyConsumption(): Promise<number> {
+    let count = 0;
+    for (const k of store.customerKeys.values()) {
+      if (k.consumedThisMonthUsd > 0) {
+        k.consumedThisMonthUsd = 0;
+        count++;
+      }
+    }
+    return count;
+  }
 }

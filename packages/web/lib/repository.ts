@@ -41,6 +41,12 @@ export interface Repository {
   incrementConsumption(apiKey: string, amountUsd: number): Promise<void>;
   recordUsage(record: UsageRecord): Promise<void>;
   recentUsageForProject(projectId: string, limit?: number): Promise<UsageRecord[]>;
+
+  // Cron-driven operations.
+  listAllProjects(): Promise<ProjectRecord[]>;
+  listAllCustomerKeys(): Promise<CustomerKeyRecord[]>;
+  usageBetween(projectId: string, fromISO: string, toISO: string): Promise<UsageRecord[]>;
+  resetAllMonthlyConsumption(): Promise<number>;
 }
 
 let cached: Repository | null = null;
