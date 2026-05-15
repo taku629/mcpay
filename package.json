@@ -1,0 +1,29 @@
+{
+  "name": "mcpay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drop-in monetization for MCP servers — Stripe-backed billing, metering, and dashboards",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build:sdk": "npm run build --workspace=@mcpay/sdk",
+    "dev:web": "npm run dev --workspace=@mcpay/web",
+    "build:web": "npm run build --workspace=@mcpay/web"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/taku629/mcpay.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "monetization",
+    "stripe",
+    "billing",
+    "metering",
+    "ai-agents"
+  ]
+}

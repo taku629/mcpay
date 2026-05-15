@@ -1,0 +1,19 @@
+{
+  "name": "@mcpay/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for monetizing MCP servers via MCPay",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/*.test.js"
+  },
+  "keywords": ["mcp", "monetization", "stripe", "billing"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}
