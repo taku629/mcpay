@@ -14,6 +14,13 @@ export interface ProjectRecord {
   createdAt: string;
 }
 
+export interface CustomerRecord {
+  id: string;
+  email: string;
+  stripeCustomerId?: string;
+  createdAt: string;
+}
+
 export interface CustomerKeyRecord {
   apiKey: string;
   projectId: string;
@@ -35,10 +42,35 @@ export interface UsageRecord {
 }
 
 export interface Repository {
+  // Projects
+  createProject(input: {
+    ownerId: string;
+    name: string;
+    apiSecretHash: string;
+  }): Promise<ProjectRecord>;
   getProject(id: string): Promise<ProjectRecord | null>;
   setProjectStripeAccount(projectId: string, stripeAccountId: string): Promise<void>;
+  listProjectsByOwner(ownerId: string): Promise<ProjectRecord[]>;
+
+  // Customers
+  getCustomerById(id: string): Promise<CustomerRecord | null>;
+  getCustomerByStripeId(stripeCustomerId: string): Promise<CustomerRecord | null>;
+  upsertCustomer(input: {
+    email: string;
+    stripeCustomerId: string;
+  }): Promise<CustomerRecord>;
+
+  // Customer keys
+  createCustomerKey(input: {
+    apiKey: string;
+    projectId: string;
+    customerId: string;
+    monthlyBudgetUsd?: number;
+  }): Promise<CustomerKeyRecord>;
   getCustomerKey(apiKey: string): Promise<CustomerKeyRecord | null>;
   incrementConsumption(apiKey: string, amountUsd: number): Promise<void>;
+
+  // Usage
   recordUsage(record: UsageRecord): Promise<void>;
   recentUsageForProject(projectId: string, limit?: number): Promise<UsageRecord[]>;
 

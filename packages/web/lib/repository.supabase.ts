@@ -1,5 +1,6 @@
 import type {
   CustomerKeyRecord,
+  CustomerRecord,
   ProjectRecord,
   Repository,
   UsageRecord,
@@ -45,12 +46,21 @@ async function rest<T>(
   return (await res.json()) as T;
 }
 
+// --- Row types ----------------------------------------------------------
+
 type ProjectRow = {
   id: string;
   owner_id: string;
   name: string;
   api_secret: string;
   stripe_account_id: string | null;
+  created_at: string;
+};
+
+type CustomerRow = {
+  id: string;
+  email: string;
+  stripe_customer_id: string | null;
   created_at: string;
 };
 
@@ -74,12 +84,21 @@ type UsageRow = {
   timestamp: string;
 };
 
+// --- Mappers ------------------------------------------------------------
+
 const mapProject = (r: ProjectRow): ProjectRecord => ({
   id: r.id,
   ownerId: r.owner_id,
   name: r.name,
   apiSecret: r.api_secret,
   stripeAccountId: r.stripe_account_id ?? undefined,
+  createdAt: r.created_at,
+});
+
+const mapCustomer = (r: CustomerRow): CustomerRecord => ({
+  id: r.id,
+  email: r.email,
+  stripeCustomerId: r.stripe_customer_id ?? undefined,
   createdAt: r.created_at,
 });
 
@@ -103,7 +122,35 @@ const mapUsage = (r: UsageRow): UsageRecord => ({
   timestamp: r.timestamp,
 });
 
+function newId(prefix: string, len = 10): string {
+  const chars = "abcdefghijkmnpqrstuvwxyz23456789";
+  let out = prefix;
+  const buf = new Uint8Array(len);
+  crypto.getRandomValues(buf);
+  for (const b of buf) out += chars[b % chars.length];
+  return out;
+}
+
+// --- Repository ---------------------------------------------------------
+
 export class SupabaseRepository implements Repository {
+  async createProject(input: {
+    ownerId: string;
+    name: string;
+    apiSecretHash: string;
+  }): Promise<ProjectRecord> {
+    const rows = await rest<ProjectRow[]>("projects", {
+      method: "POST",
+      body: JSON.stringify({
+        id: newId("prj_"),
+        owner_id: input.ownerId,
+        name: input.name,
+        api_secret: input.apiSecretHash,
+      }),
+    });
+    return mapProject(rows[0]);
+  }
+
   async getProject(id: string): Promise<ProjectRecord | null> {
     const rows = await rest<ProjectRow[]>("projects", {
       query: { id: `eq.${id}`, select: "*", limit: "1" },
@@ -117,6 +164,69 @@ export class SupabaseRepository implements Repository {
       query: { id: `eq.${projectId}` },
       body: JSON.stringify({ stripe_account_id: stripeAccountId }),
     });
+  }
+
+  async listProjectsByOwner(ownerId: string): Promise<ProjectRecord[]> {
+    const rows = await rest<ProjectRow[]>("projects", {
+      query: { owner_id: `eq.${ownerId}`, select: "*" },
+    });
+    return rows.map(mapProject);
+  }
+
+  async getCustomerById(id: string): Promise<CustomerRecord | null> {
+    const rows = await rest<CustomerRow[]>("customers", {
+      query: { id: `eq.${id}`, select: "*", limit: "1" },
+    });
+    return rows[0] ? mapCustomer(rows[0]) : null;
+  }
+
+  async getCustomerByStripeId(stripeCustomerId: string): Promise<CustomerRecord | null> {
+    const rows = await rest<CustomerRow[]>("customers", {
+      query: { stripe_customer_id: `eq.${stripeCustomerId}`, select: "*", limit: "1" },
+    });
+    return rows[0] ? mapCustomer(rows[0]) : null;
+  }
+
+  async upsertCustomer(input: {
+    email: string;
+    stripeCustomerId: string;
+  }): Promise<CustomerRecord> {
+    const existing = await this.getCustomerByStripeId(input.stripeCustomerId);
+    if (existing) {
+      const rows = await rest<CustomerRow[]>("customers", {
+        method: "PATCH",
+        query: { id: `eq.${existing.id}` },
+        body: JSON.stringify({ email: input.email }),
+      });
+      return mapCustomer(rows[0]);
+    }
+    const rows = await rest<CustomerRow[]>("customers", {
+      method: "POST",
+      body: JSON.stringify({
+        id: newId("cust_"),
+        email: input.email,
+        stripe_customer_id: input.stripeCustomerId,
+      }),
+    });
+    return mapCustomer(rows[0]);
+  }
+
+  async createCustomerKey(input: {
+    apiKey: string;
+    projectId: string;
+    customerId: string;
+    monthlyBudgetUsd?: number;
+  }): Promise<CustomerKeyRecord> {
+    const rows = await rest<CustomerKeyRow[]>("customer_keys", {
+      method: "POST",
+      body: JSON.stringify({
+        api_key: input.apiKey,
+        project_id: input.projectId,
+        customer_id: input.customerId,
+        monthly_budget_usd: input.monthlyBudgetUsd ?? null,
+      }),
+    });
+    return mapKey(rows[0]);
   }
 
   async getCustomerKey(apiKey: string): Promise<CustomerKeyRecord | null> {

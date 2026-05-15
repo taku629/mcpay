@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { log } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getRepository } from "@/lib/repository";
 import { verifyApiSecret } from "@/lib/secret-hash";
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
 
   const rate = checkRateLimit(`verify:${projectId}`, { limit: 600, windowMs: 60_000 });
   if (!rate.ok) {
+    log.warn("verify rate limited", { projectId, retryAfterMs: rate.retryAfterMs });
     return NextResponse.json(
       { ok: false, reason: "rate_limited", retryAfterMs: rate.retryAfterMs },
       { status: 429, headers: { "retry-after": String(Math.ceil(rate.retryAfterMs / 1000)) } },

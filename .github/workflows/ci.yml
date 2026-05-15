@@ -26,7 +26,7 @@ jobs:
         run: node --test dist/meter.test.js
 
   web:
-    name: Web (typecheck)
+    name: Web (typecheck + unit tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck
         working-directory: packages/web
         run: npx tsc --noEmit
+      - name: Lib unit tests
+        working-directory: packages/web/lib
+        run: node --test *.test.mjs
 
   sdk-python:
     name: Python SDK

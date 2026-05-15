@@ -1,5 +1,6 @@
 import type {
   CustomerKeyRecord,
+  CustomerRecord,
   ProjectRecord,
   Repository,
   UsageRecord,
@@ -7,6 +8,7 @@ import type {
 
 class Store {
   projects = new Map<string, ProjectRecord>();
+  customers = new Map<string, CustomerRecord>();
   customerKeys = new Map<string, CustomerKeyRecord>();
   usage: UsageRecord[] = [];
 }
@@ -29,6 +31,12 @@ function seed() {
     createdAt: new Date().toISOString(),
   });
 
+  store.customers.set("cust_demo", {
+    id: "cust_demo",
+    email: "demo@example.com",
+    createdAt: new Date().toISOString(),
+  });
+
   store.customerKeys.set("mcpay_live_demo_key_abc123", {
     apiKey: "mcpay_live_demo_key_abc123",
     projectId: "prj_demo",
@@ -41,7 +49,31 @@ function seed() {
 
 seed();
 
+function randomId(prefix: string, len = 10): string {
+  const chars = "abcdefghijkmnpqrstuvwxyz23456789";
+  let out = prefix;
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
 export class InMemoryRepository implements Repository {
+  // --- Projects ----------------------------------------------------------
+  async createProject(input: {
+    ownerId: string;
+    name: string;
+    apiSecretHash: string;
+  }): Promise<ProjectRecord> {
+    const record: ProjectRecord = {
+      id: randomId("prj_"),
+      ownerId: input.ownerId,
+      name: input.name,
+      apiSecret: input.apiSecretHash,
+      createdAt: new Date().toISOString(),
+    };
+    store.projects.set(record.id, record);
+    return record;
+  }
+
   async getProject(id: string): Promise<ProjectRecord | null> {
     return store.projects.get(id) ?? null;
   }
@@ -49,6 +81,60 @@ export class InMemoryRepository implements Repository {
   async setProjectStripeAccount(projectId: string, stripeAccountId: string): Promise<void> {
     const proj = store.projects.get(projectId);
     if (proj) proj.stripeAccountId = stripeAccountId;
+  }
+
+  async listProjectsByOwner(ownerId: string): Promise<ProjectRecord[]> {
+    return Array.from(store.projects.values()).filter((p) => p.ownerId === ownerId);
+  }
+
+  // --- Customers ---------------------------------------------------------
+  async getCustomerById(id: string): Promise<CustomerRecord | null> {
+    return store.customers.get(id) ?? null;
+  }
+
+  async getCustomerByStripeId(stripeCustomerId: string): Promise<CustomerRecord | null> {
+    for (const c of store.customers.values()) {
+      if (c.stripeCustomerId === stripeCustomerId) return c;
+    }
+    return null;
+  }
+
+  async upsertCustomer(input: {
+    email: string;
+    stripeCustomerId: string;
+  }): Promise<CustomerRecord> {
+    const existing = await this.getCustomerByStripeId(input.stripeCustomerId);
+    if (existing) {
+      existing.email = input.email;
+      return existing;
+    }
+    const record: CustomerRecord = {
+      id: randomId("cust_"),
+      email: input.email,
+      stripeCustomerId: input.stripeCustomerId,
+      createdAt: new Date().toISOString(),
+    };
+    store.customers.set(record.id, record);
+    return record;
+  }
+
+  // --- Customer keys -----------------------------------------------------
+  async createCustomerKey(input: {
+    apiKey: string;
+    projectId: string;
+    customerId: string;
+    monthlyBudgetUsd?: number;
+  }): Promise<CustomerKeyRecord> {
+    const record: CustomerKeyRecord = {
+      apiKey: input.apiKey,
+      projectId: input.projectId,
+      customerId: input.customerId,
+      monthlyBudgetUsd: input.monthlyBudgetUsd,
+      consumedThisMonthUsd: 0,
+      createdAt: new Date().toISOString(),
+    };
+    store.customerKeys.set(record.apiKey, record);
+    return record;
   }
 
   async getCustomerKey(apiKey: string): Promise<CustomerKeyRecord | null> {
@@ -60,6 +146,7 @@ export class InMemoryRepository implements Repository {
     if (k) k.consumedThisMonthUsd += amountUsd;
   }
 
+  // --- Usage -------------------------------------------------------------
   async recordUsage(record: UsageRecord): Promise<void> {
     store.usage.push(record);
   }
@@ -71,6 +158,7 @@ export class InMemoryRepository implements Repository {
       .reverse();
   }
 
+  // --- Cron --------------------------------------------------------------
   async listAllProjects(): Promise<ProjectRecord[]> {
     return Array.from(store.projects.values());
   }

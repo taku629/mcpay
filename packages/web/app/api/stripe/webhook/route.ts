@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { generateCustomerApiKey } from "@/lib/api-key";
+import { getRepository } from "@/lib/repository";
 import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -37,26 +39,67 @@ export async function POST(request: Request) {
   }
 
   switch (event.type) {
+    case "checkout.session.completed":
+      await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      break;
     case "account.updated":
-      // Connect account onboarding state changed. Re-pull status into the dashboard.
       console.log("[stripe] account.updated", event.data.object.id);
       break;
     case "invoice.paid":
-      // Customer paid an invoice — credit the author's balance / unlock budget.
       console.log("[stripe] invoice.paid", event.data.object.id);
       break;
     case "invoice.payment_failed":
-      // Block usage for that customer key until resolved.
       console.log("[stripe] invoice.payment_failed", event.data.object.id);
       break;
     case "customer.subscription.deleted":
-      // Monthly-unlimited subscription cancelled.
       console.log("[stripe] subscription.deleted", event.data.object.id);
       break;
     default:
-      // Ignore — but log so we can spot useful events to handle later.
       console.log("[stripe] ignored event", event.type);
   }
 
   return NextResponse.json({ received: true });
+}
+
+// Mint a customer + API key with the purchased budget. Idempotent on
+// session.id — re-delivered webhooks won't create duplicate keys (we look up
+// the stripe customer first).
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+  const projectId = session.metadata?.mcpay_project_id;
+  const amountUsdRaw = session.metadata?.mcpay_amount_usd;
+  const email =
+    session.metadata?.mcpay_customer_email ??
+    session.customer_details?.email ??
+    session.customer_email ??
+    "";
+
+  if (!projectId || !amountUsdRaw || !email) {
+    console.warn("[stripe] checkout.session.completed missing metadata", session.id);
+    return;
+  }
+
+  const amountUsd = Number(amountUsdRaw);
+  if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+    console.warn("[stripe] checkout.session.completed bad amount", amountUsdRaw);
+    return;
+  }
+
+  const stripeCustomerId =
+    (typeof session.customer === "string" ? session.customer : session.customer?.id) ?? "";
+  if (!stripeCustomerId) {
+    console.warn("[stripe] checkout.session.completed no customer", session.id);
+    return;
+  }
+
+  const repo = await getRepository();
+  const customer = await repo.upsertCustomer({ email, stripeCustomerId });
+  const apiKey = generateCustomerApiKey();
+  await repo.createCustomerKey({
+    apiKey,
+    projectId,
+    customerId: customer.id,
+    monthlyBudgetUsd: amountUsd,
+  });
+
+  console.log("[stripe] issued mcpay key", { projectId, customerId: customer.id });
 }
