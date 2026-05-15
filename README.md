@@ -60,8 +60,12 @@ We don't take a cut until you're earning real money.
 ```
 mcpay/
 ├── packages/
-│   ├── sdk-ts/         # @mcpay/sdk — TypeScript SDK for wrapping MCP servers
-│   └── web/            # Next.js dashboard + auth + Stripe Connect
+│   ├── sdk-ts/         # @mcpay/sdk      — TypeScript SDK
+│   ├── sdk-python/     # mcpay (PyPI)    — Python SDK (wire-compatible)
+│   └── web/            # Next.js dashboard
+│       ├── app/api/    #   verify · usage · stripe/* · billing/portal
+│       ├── lib/        #   repository (memory + supabase) · stripe · auth · rate-limit
+│       └── db/         #   schema.sql + migrations
 ├── examples/
 │   └── basic-server/   # Reference MCP server using the SDK
 ├── docs/
@@ -73,14 +77,19 @@ mcpay/
 ## Roadmap
 
 - [x] TypeScript SDK (core metering + auth)
+- [x] Python SDK (wire-compatible with TS)
 - [x] Next.js dashboard skeleton
-- [x] Stripe Connect onboarding flow
-- [ ] Python SDK
-- [ ] Per-customer rate limiting
-- [ ] Usage-based invoicing (Stripe metered billing)
-- [ ] Webhook system for usage events
-- [ ] Self-hosted mode (BYO Postgres + Stripe)
+- [x] Stripe Connect onboarding flow (Express)
+- [x] Stripe webhook with signature verification
+- [x] Stripe Billing Portal route
+- [x] Postgres/Supabase data layer + RLS schema
+- [x] Sliding-window rate limiting
+- [x] Auth scaffold (demo + Supabase modes)
+- [ ] Real Supabase Auth wiring (JWT verification, not unsafe decode)
+- [ ] Usage-based invoicing (Stripe metered billing → monthly invoice)
+- [ ] Per-customer monthly reset cron
 - [ ] Marketplace listing page (discoverability)
+- [ ] Webhook system for *author* usage events
 
 ## Getting Started
 

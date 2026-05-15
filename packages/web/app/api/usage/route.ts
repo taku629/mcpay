@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { store, type UsageRecord } from "@/lib/store";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getRepository, type UsageRecord } from "@/lib/repository";
 
 export async function POST(request: Request) {
   const auth = request.headers.get("authorization") ?? "";
@@ -12,7 +13,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "invalid_payload" }, { status: 400 });
   }
 
-  const project = store.projects.get(body.projectId);
+  const rate = checkRateLimit(`usage:${body.projectId}`, { limit: 1200, windowMs: 60_000 });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { ok: false, reason: "rate_limited", retryAfterMs: rate.retryAfterMs },
+      { status: 429, headers: { "retry-after": String(Math.ceil(rate.retryAfterMs / 1000)) } },
+    );
+  }
+
+  const repo = await getRepository();
+  const project = await repo.getProject(body.projectId);
   if (!project) {
     return NextResponse.json({ ok: false, reason: "unknown_project" }, { status: 404 });
   }
@@ -22,12 +32,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "bad_secret" }, { status: 401 });
   }
 
-  const key = store.customerKeys.get(body.apiKey);
-  if (key && key.projectId === body.projectId) {
-    key.consumedThisMonthUsd += body.amountUsd;
-  }
-
-  store.usage.push({
+  await repo.incrementConsumption(body.apiKey, body.amountUsd);
+  await repo.recordUsage({
     id: `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
     projectId: body.projectId,
     apiKey: body.apiKey,

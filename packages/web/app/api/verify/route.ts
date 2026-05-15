@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { store } from "@/lib/store";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getRepository } from "@/lib/repository";
 
 export async function POST(request: Request) {
   const auth = request.headers.get("authorization") ?? "";
@@ -20,7 +21,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const project = store.projects.get(projectId);
+  const rate = checkRateLimit(`verify:${projectId}`, { limit: 600, windowMs: 60_000 });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { ok: false, reason: "rate_limited", retryAfterMs: rate.retryAfterMs },
+      { status: 429, headers: { "retry-after": String(Math.ceil(rate.retryAfterMs / 1000)) } },
+    );
+  }
+
+  const repo = await getRepository();
+  const project = await repo.getProject(projectId);
   if (!project) {
     return NextResponse.json({ ok: false, reason: "unknown_project" }, { status: 404 });
   }
@@ -30,11 +40,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "bad_secret" }, { status: 401 });
   }
 
-  const key = store.customerKeys.get(apiKey);
+  const key = await repo.getCustomerKey(apiKey);
   if (!key || key.projectId !== projectId) {
     return NextResponse.json({ ok: false, reason: "unknown_key" }, { status: 404 });
   }
-
   if (key.revokedAt) {
     return NextResponse.json({ ok: false, reason: "revoked" }, { status: 403 });
   }

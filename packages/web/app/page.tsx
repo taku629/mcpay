@@ -68,6 +68,9 @@ export default wrapMCPServer(server, {
   },
 });`}</code>
         </pre>
+        <p className="mt-3 text-sm text-zinc-500">
+          Python? <code className="font-mono text-zinc-300">pip install mcpay</code> — wire-compatible.
+        </p>
       </section>
 
       <section className="mb-24 grid gap-8 md:grid-cols-3">
@@ -96,8 +99,42 @@ export default wrapMCPServer(server, {
         </Link>
       </section>
 
+      <section className="mb-24">
+        <h2 className="mb-8 text-2xl font-semibold">FAQ</h2>
+        <div className="space-y-6">
+          <Faq q="Do I have to host on MCPay to use the SDK?">
+            No. <code className="font-mono">@mcpay/sdk</code> takes an <code className="font-mono">endpoint</code> option.
+            Point it at your own deployment of the dashboard repo and you have a self-hosted control
+            plane. MCPay-Cloud just removes the hosting work.
+          </Faq>
+          <Faq q="What happens if your service is down?">
+            With <code className="font-mono">failOpen: true</code> the SDK lets paid calls through and queues
+            metering for later. With it off (the default in prod), paid calls fail closed. Free tools
+            are unaffected — they never call MCPay.
+          </Faq>
+          <Faq q="How is this different from x402 / L402 / Lightning?">
+            Those are crypto-native protocols. MCPay is fiat-native, Stripe-backed. Customers pay
+            with cards, you receive USD via Stripe Connect, taxes/invoices/refunds are handled by
+            Stripe. If your customers prefer crypto, the protocols above are great — they're
+            orthogonal to MCPay, not competitors.
+          </Faq>
+          <Faq q="Can I price per token, not per call?">
+            Yes. <code className="font-mono">{"{ type: 'per_token', amountUsdPer1k: 0.002 }"}</code>.
+            Your tool reports the token count; the SDK does the multiplication.
+          </Faq>
+          <Faq q="When does the 10% platform fee kick in?">
+            Once your project crosses $1,000 of gross merchandise value in a calendar month. Below
+            that we charge 0%. Stripe's 2.9%+$0.30 are pass-through, paid by the customer.
+          </Faq>
+        </div>
+      </section>
+
       <footer className="border-t border-zinc-900 pt-8 text-sm text-zinc-500">
         MIT-licensed. Built for the MCP ecosystem.
+        {" · "}
+        <a href="https://github.com/taku629/mcpay" className="hover:text-zinc-300">
+          GitHub
+        </a>
       </footer>
     </main>
   );
@@ -109,5 +146,17 @@ function Feature({ title, body }: { title: string; body: string }) {
       <h3 className="mb-2 text-lg font-semibold">{title}</h3>
       <p className="text-sm text-zinc-400">{body}</p>
     </div>
+  );
+}
+
+function Faq({ q, children }: { q: string; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-lg border border-zinc-800 p-5 open:bg-zinc-950">
+      <summary className="cursor-pointer text-sm font-medium text-zinc-200 marker:content-['']">
+        <span className="mr-2 text-zinc-500 group-open:rotate-90 inline-block transition">▸</span>
+        {q}
+      </summary>
+      <div className="mt-3 pl-5 text-sm leading-relaxed text-zinc-400">{children}</div>
+    </details>
   );
 }
