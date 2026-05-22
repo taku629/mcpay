@@ -54,6 +54,7 @@ export default function PricingPage() {
           MCPay
         </Link>
         <div className="flex gap-6 text-sm text-zinc-400">
+          <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
           <Link href="/pricing" className="text-white">Pricing</Link>
           <Link href="/dashboard" className="hover:text-white">Dashboard</Link>
         </div>

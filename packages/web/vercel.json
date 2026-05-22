@@ -2,12 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/cron/aggregate-invoices",
-      "schedule": "0 3 * * *"
-    },
-    {
       "path": "/api/cron/reset-monthly",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/cron/aggregate-invoices",
+      "schedule": "0 3 1 * *"
     }
   ]
 }

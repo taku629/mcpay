@@ -1,4 +1,5 @@
-// A *real* MCP server using @modelcontextprotocol/sdk, monetized via MCPay.
+// A *real* MCP server using @modelcontextprotocol/sdk, monetized via MCPay
+// with the 3-line drop-in `wrapMCPServer`.
 //
 // Start it under Claude Desktop / Cursor by adding to your MCP config:
 //
@@ -16,9 +17,9 @@
 //     }
 //   }
 //
-// Customers paste *their* MCPay key (mcpay_live_…) into a header named
-// x-mcpay-key — many MCP clients support arbitrary header injection per server.
-// For dev we read it from the MCPAY_KEY env var if the header is absent.
+// Customers paste their MCPay key (mcpay_live_…) into the call arguments as
+// `_mcpayKey`, or into the request `_meta` field as `"x-mcpay-key"`. Both are
+// picked up automatically by the default key extractor.
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -26,22 +27,29 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { createMCPayMiddleware, MCPayError } from "@mcpay/sdk";
+import { wrapMCPServer } from "@mcpay/sdk";
 
-const mcpay = createMCPayMiddleware<unknown>({
-  projectId: process.env.MCPAY_PROJECT_ID ?? "prj_demo",
-  apiSecret: process.env.MCPAY_API_SECRET ?? "sk_test_demo_only_do_not_use_in_prod",
-  endpoint: process.env.MCPAY_ENDPOINT ?? "http://localhost:3000",
-  pricing: {
-    search_web: { type: "per_call", amountUsd: 0.01 },
-    summarize:  { type: "per_token", amountUsdPer1k: 0.002 },
-    ping:       { type: "free" },
+const server = wrapMCPServer(
+  new Server({ name: "mcpay-demo", version: "0.1.0" }, { capabilities: { tools: {} } }),
+  {
+    projectId: process.env.MCPAY_PROJECT_ID ?? "prj_demo",
+    apiSecret: process.env.MCPAY_API_SECRET ?? "sk_test_demo_only_do_not_use_in_prod",
+    endpoint: process.env.MCPAY_ENDPOINT ?? "http://localhost:3000",
+    pricing: {
+      search_web: { type: "per_call", amountUsd: 0.01 },
+      summarize:  { type: "per_token", amountUsdPer1k: 0.002 },
+      ping:       { type: "free" },
+    },
+    // Claude Desktop & most stdio MCP clients can't yet inject per-call
+    // headers, so we also accept the customer's key from a process env var.
+    extractApiKey: (req) => {
+      const args = req.params.arguments as Record<string, unknown> | undefined;
+      if (args && typeof args._mcpayKey === "string") return args._mcpayKey;
+      const meta = req.params._meta;
+      if (meta && typeof meta["x-mcpay-key"] === "string") return meta["x-mcpay-key"] as string;
+      return process.env.MCPAY_KEY;
+    },
   },
-});
-
-const server = new Server(
-  { name: "mcpay-demo", version: "0.1.0" },
-  { capabilities: { tools: {} } },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -72,54 +80,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+// No MCPay boilerplate inside the handler — wrapMCPServer takes care of key
+// verification, budget checks, and usage metering for every paid tool.
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const toolName = req.params.name;
-  // MCP clients don't have a standard for "auth headers", so we look in two
-  // places: arguments._mcpayKey (explicit pass-through) and the MCPAY_KEY env
-  // var (dev convenience). Real prod deployments would standardise on one.
-  const argsObject = (req.params.arguments ?? {}) as Record<string, unknown>;
-  const apiKey =
-    (typeof argsObject._mcpayKey === "string" ? argsObject._mcpayKey : undefined) ??
-    process.env.MCPAY_KEY;
+  const args = (req.params.arguments ?? {}) as Record<string, unknown>;
 
-  try {
-    const result = await mcpay({ toolName, apiKey }, async () => {
-      switch (toolName) {
-        case "search_web":
-          return {
-            content: [
-              { type: "text", text: `pretend search results for: ${argsObject.q}` },
-            ],
-          };
-        case "summarize": {
-          const text = String(argsObject.text ?? "");
-          return {
-            content: [{ type: "text", text: text.slice(0, 200) }],
-            _meta: { tokens: Math.ceil(text.length / 4) },
-          };
-        }
-        case "ping":
-          return { content: [{ type: "text", text: "pong" }] };
-        default:
-          throw new Error(`Unknown tool: ${toolName}`);
-      }
-    });
-
-    return result as { content: Array<{ type: string; text: string }> };
-  } catch (err) {
-    if (err instanceof MCPayError) {
+  switch (toolName) {
+    case "search_web":
       return {
-        content: [{ type: "text", text: `[mcpay/${err.code}] ${err.message}` }],
-        isError: true,
+        content: [{ type: "text", text: `pretend search results for: ${args.q}` }],
+      };
+    case "summarize": {
+      const text = String(args.text ?? "");
+      return {
+        content: [{ type: "text", text: text.slice(0, 200) }],
+        // _meta.tokens is read by the default `extractTokens` for per_token billing.
+        _meta: { tokens: Math.ceil(text.length / 4) },
       };
     }
-    throw err;
+    case "ping":
+      return { content: [{ type: "text", text: "pong" }] };
+    default:
+      return {
+        content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
+        isError: true,
+      };
   }
 });
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-// stderr is the conventional MCP server log channel; stdout is reserved for
-// JSON-RPC framing.
 console.error("mcpay-demo MCP server ready (stdio)");

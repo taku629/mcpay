@@ -1,6 +1,7 @@
 import type {
   CustomerKeyRecord,
   CustomerRecord,
+  InvoiceRunRecord,
   ProjectRecord,
   Repository,
   UsageRecord,
@@ -11,7 +12,11 @@ class Store {
   customers = new Map<string, CustomerRecord>();
   customerKeys = new Map<string, CustomerKeyRecord>();
   usage: UsageRecord[] = [];
+  invoiceRuns = new Map<string, InvoiceRunRecord>();
 }
+
+const runKey = (projectId: string, customerId: string, monthKey: string) =>
+  `${projectId}|${customerId}|${monthKey}`;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -182,5 +187,30 @@ export class InMemoryRepository implements Repository {
       }
     }
     return count;
+  }
+
+  // --- Invoice runs ------------------------------------------------------
+  async getInvoiceRun(
+    projectId: string,
+    customerId: string,
+    monthKey: string,
+  ): Promise<InvoiceRunRecord | null> {
+    return store.invoiceRuns.get(runKey(projectId, customerId, monthKey)) ?? null;
+  }
+
+  async recordInvoiceRun(input: {
+    projectId: string;
+    customerId: string;
+    monthKey: string;
+    stripeInvoiceId: string;
+    totalUsd: number;
+    callCount: number;
+  }): Promise<InvoiceRunRecord> {
+    const record: InvoiceRunRecord = {
+      ...input,
+      createdAt: new Date().toISOString(),
+    };
+    store.invoiceRuns.set(runKey(input.projectId, input.customerId, input.monthKey), record);
+    return record;
   }
 }

@@ -83,7 +83,29 @@ create index if not exists usage_events_project_ts_idx on usage_events(project_i
 create index if not exists usage_events_api_key_idx    on usage_events(api_key);
 
 -- =====================================================================
--- 7. Helper RPC: atomically bump a customer's monthly consumption
+-- 7. Invoice runs (idempotency for the aggregate-invoices cron)
+-- =====================================================================
+create table if not exists invoice_runs (
+  project_id        text not null references projects(id) on delete cascade,
+  customer_id       text not null references customers(id) on delete cascade,
+  month_key         text not null,                         -- "YYYY-MM" (UTC)
+  stripe_invoice_id text not null,
+  total_usd         numeric(12,4) not null,
+  call_count        integer not null,
+  created_at        timestamptz not null default now(),
+  primary key (project_id, customer_id, month_key)
+);
+
+create index if not exists invoice_runs_project_idx on invoice_runs(project_id);
+
+alter table invoice_runs enable row level security;
+
+create policy "owner reads own invoice runs"
+  on invoice_runs for select
+  using (project_id in (select id from projects where owner_id = auth.uid()::text));
+
+-- =====================================================================
+-- 8. Helper RPC: atomically bump a customer's monthly consumption
 -- =====================================================================
 create or replace function increment_customer_consumption(
   p_api_key   text,
@@ -99,7 +121,7 @@ end;
 $$;
 
 -- =====================================================================
--- 8. RLS — authors only see their own data. The service role bypasses RLS.
+-- 9. RLS — authors only see their own data. The service role bypasses RLS.
 -- =====================================================================
 alter table authors        enable row level security;
 alter table projects       enable row level security;

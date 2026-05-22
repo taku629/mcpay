@@ -8,6 +8,7 @@ export default function Landing() {
           MCPay
         </Link>
         <div className="flex gap-6 text-sm text-zinc-400">
+          <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
           <Link href="/pricing" className="hover:text-white">Pricing</Link>
           <Link href="/dashboard" className="hover:text-white">Dashboard</Link>
           <a
@@ -40,14 +41,12 @@ export default function Landing() {
           >
             Start free →
           </Link>
-          <a
-            href="https://github.com/taku629/mcpay"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href="/marketplace"
             className="rounded-md border border-zinc-800 px-5 py-3 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900"
           >
-            View on GitHub
-          </a>
+            Browse servers
+          </Link>
         </div>
       </section>
 

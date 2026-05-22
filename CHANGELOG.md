@@ -7,7 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`wrapMCPServer` now actually intercepts tool calls.** Previously it
+  attached a `__mcpay` marker but left `setRequestHandler` untouched, so the
+  documented "3-line drop-in" did not gate or meter tool calls. The wrapper
+  now monkey-patches `setRequestHandler` so any handler registered against the
+  `CallTool` schema is automatically wrapped in the MCPay middleware.
+- `examples/mcp-server-real` rewritten to use `wrapMCPServer` directly, with
+  no per-tool MCPay boilerplate in the handler.
+
 ### Added
+
+- `MCPayConfig.extractApiKey` — override how the customer's MCPay key is
+  pulled from a CallTool request. Default reads
+  `params.arguments._mcpayKey` then `params._meta["x-mcpay-key"]`.
+- `MCPayConfig.extractTokens` — derive token counts for `per_token` pricing
+  from the tool result. Default reads `result._meta.tokens`.
+- `CallToolRequestLike` / `CallToolResultLike` exported types.
+- Tests covering free pass-through, missing-key rejection, unrelated-schema
+  pass-through, and custom `extractApiKey`.
+
+- `/marketplace` public index page — discovery surface listing every project
+  with a connected Stripe account, ranked by 30-day gross revenue. Each card
+  links to the existing `/marketplace/[projectId]` checkout page. Empty-state
+  explains that Stripe Connect is the gating step. Landing + dashboard +
+  pricing navs gain a "Marketplace" link; the landing hero's secondary CTA is
+  now "Browse servers".
+
+- Monthly usage billing:
+  - `/api/cron/aggregate-invoices` rewritten. Runs on the 1st of each month
+    and bills the *previous* calendar month: one finalized invoice per
+    (project, customer) on the project's connected Stripe account, with
+    `collection_method: send_invoice` so Stripe emails a hosted invoice URL.
+  - `invoice_runs` table + `Repository.getInvoiceRun` / `recordInvoiceRun`
+    give us PK-level idempotency. Combined with Stripe idempotency keys, a
+    re-run or retry can't double-bill.
+  - `?month=YYYY-MM` query param lets ops backfill or re-trigger a window.
+  - `vercel.json` gains the cron entries (00:00 reset, 03:00 aggregate, UTC).
+  - Fixes the previous stub's `customer: key.customerId` bug — it was passing
+    MCPay's internal customer id where Stripe expected a Stripe customer id.
+
+- Real Supabase magic-link login (replaces the form stub):
+  - `POST /api/auth/magic-link` triggers `/auth/v1/otp` via the anon key.
+  - `/auth/callback` page extracts implicit-flow tokens from the URL hash.
+  - `POST /api/auth/set-session` verifies the JWT and mints HttpOnly
+    `sb-access-token` / `sb-refresh-token` cookies.
+  - `GET|POST /api/auth/signout` clears the session.
+  - Dashboard nav gains a "Sign out" link.
+  - `lib/supabase-auth.ts` thin REST wrapper (`sendMagicLink`, `refreshSession`).
+- AuthZ checks: `/api/stripe/connect/onboard` now requires the caller to own
+  the project; `/api/billing/portal` checks the Stripe customer's email matches
+  the authenticated user.
+- `SUPABASE_ANON_KEY` env var (required when `AUTH_MODE=supabase`).
 
 - Customer-facing checkout flow:
   - `/marketplace/[projectId]` public listing page.

@@ -41,6 +41,19 @@ export interface UsageRecord {
   timestamp: string;
 }
 
+// One row per (project, customer, month) the aggregate-invoices cron has
+// already processed. Lets us safely re-run the cron — if a run already
+// exists, we skip without double-billing.
+export interface InvoiceRunRecord {
+  projectId: string;
+  customerId: string;
+  monthKey: string; // "YYYY-MM" — UTC calendar month being billed
+  stripeInvoiceId: string;
+  totalUsd: number;
+  callCount: number;
+  createdAt: string;
+}
+
 export interface Repository {
   // Projects
   createProject(input: {
@@ -79,6 +92,21 @@ export interface Repository {
   listAllCustomerKeys(): Promise<CustomerKeyRecord[]>;
   usageBetween(projectId: string, fromISO: string, toISO: string): Promise<UsageRecord[]>;
   resetAllMonthlyConsumption(): Promise<number>;
+
+  // Invoice runs (idempotency for the aggregate-invoices cron).
+  getInvoiceRun(
+    projectId: string,
+    customerId: string,
+    monthKey: string,
+  ): Promise<InvoiceRunRecord | null>;
+  recordInvoiceRun(input: {
+    projectId: string;
+    customerId: string;
+    monthKey: string;
+    stripeInvoiceId: string;
+    totalUsd: number;
+    callCount: number;
+  }): Promise<InvoiceRunRecord>;
 }
 
 let cached: Repository | null = null;

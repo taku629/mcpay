@@ -1,6 +1,7 @@
 import type {
   CustomerKeyRecord,
   CustomerRecord,
+  InvoiceRunRecord,
   ProjectRecord,
   Repository,
   UsageRecord,
@@ -84,6 +85,16 @@ type UsageRow = {
   timestamp: string;
 };
 
+type InvoiceRunRow = {
+  project_id: string;
+  customer_id: string;
+  month_key: string;
+  stripe_invoice_id: string;
+  total_usd: number;
+  call_count: number;
+  created_at: string;
+};
+
 // --- Mappers ------------------------------------------------------------
 
 const mapProject = (r: ProjectRow): ProjectRecord => ({
@@ -120,6 +131,16 @@ const mapUsage = (r: UsageRow): UsageRecord => ({
   amountUsd: r.amount_usd,
   tokens: r.tokens ?? undefined,
   timestamp: r.timestamp,
+});
+
+const mapInvoiceRun = (r: InvoiceRunRow): InvoiceRunRecord => ({
+  projectId: r.project_id,
+  customerId: r.customer_id,
+  monthKey: r.month_key,
+  stripeInvoiceId: r.stripe_invoice_id,
+  totalUsd: r.total_usd,
+  callCount: r.call_count,
+  createdAt: r.created_at,
 });
 
 function newId(prefix: string, len = 10): string {
@@ -302,5 +323,44 @@ export class SupabaseRepository implements Repository {
       body: JSON.stringify({ consumed_this_month_usd: 0 }),
     });
     return rows.length;
+  }
+
+  async getInvoiceRun(
+    projectId: string,
+    customerId: string,
+    monthKey: string,
+  ): Promise<InvoiceRunRecord | null> {
+    const rows = await rest<InvoiceRunRow[]>("invoice_runs", {
+      query: {
+        project_id: `eq.${projectId}`,
+        customer_id: `eq.${customerId}`,
+        month_key: `eq.${monthKey}`,
+        select: "*",
+        limit: "1",
+      },
+    });
+    return rows[0] ? mapInvoiceRun(rows[0]) : null;
+  }
+
+  async recordInvoiceRun(input: {
+    projectId: string;
+    customerId: string;
+    monthKey: string;
+    stripeInvoiceId: string;
+    totalUsd: number;
+    callCount: number;
+  }): Promise<InvoiceRunRecord> {
+    const rows = await rest<InvoiceRunRow[]>("invoice_runs", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: input.projectId,
+        customer_id: input.customerId,
+        month_key: input.monthKey,
+        stripe_invoice_id: input.stripeInvoiceId,
+        total_usd: input.totalUsd,
+        call_count: input.callCount,
+      }),
+    });
+    return mapInvoiceRun(rows[0]);
   }
 }

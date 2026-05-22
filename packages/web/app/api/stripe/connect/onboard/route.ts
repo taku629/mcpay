@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { getRepository } from "@/lib/repository";
 import { appBaseUrl, getStripe } from "@/lib/stripe";
 
 // Begins Stripe Connect Express onboarding for an author. The author POSTs
 // with their projectId; we create (or reuse) a Connect account and return a
-// short-lived hosted onboarding URL.
-//
-// Auth: the route is server-only and trusts the session middleware. In MVP we
-// accept the projectId in the body; production should derive it from the
-// authenticated user.
+// short-lived hosted onboarding URL. The caller must own the project — without
+// this check anyone could attach a Connect account to anyone else's project.
 
 export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
   const body = (await request.json().catch(() => ({}))) as { projectId?: string };
   if (!body.projectId) {
     return NextResponse.json({ error: "missing_project_id" }, { status: 400 });
@@ -20,6 +23,9 @@ export async function POST(request: Request) {
   const project = await repo.getProject(body.projectId);
   if (!project) {
     return NextResponse.json({ error: "unknown_project" }, { status: 404 });
+  }
+  if (project.ownerId !== user.id) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const stripe = getStripe();

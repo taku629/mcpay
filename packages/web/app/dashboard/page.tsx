@@ -20,9 +20,11 @@ export default async function Dashboard() {
         <Link href="/" className="text-lg font-semibold tracking-tight">
           MCPay
         </Link>
-        <div className="flex gap-6 text-sm text-zinc-400">
+        <div className="flex items-center gap-6 text-sm text-zinc-400">
+          <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
           <Link href="/pricing" className="hover:text-white">Pricing</Link>
           <Link href="/dashboard" className="text-white">Dashboard</Link>
+          <a href="/api/auth/signout" className="hover:text-white">Sign out</a>
         </div>
       </nav>
 

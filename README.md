@@ -26,23 +26,30 @@ You ship tools. We ship the cash register.
 ```ts
 import { wrapMCPServer } from "@mcpay/sdk";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-const server = new Server({ name: "my-mcp", version: "0.1.0" });
-
-// existing tool registration ...
-
-export default wrapMCPServer(server, {
-  projectId: process.env.MCPAY_PROJECT_ID!,
-  apiSecret: process.env.MCPAY_API_SECRET!,
-  pricing: {
-    "search_web":     { type: "per_call", amountUsd: 0.01 },
-    "generate_image": { type: "per_call", amountUsd: 0.05 },
-    "ping":           { type: "free" },
+const server = wrapMCPServer(
+  new Server({ name: "my-mcp", version: "0.1.0" }, { capabilities: { tools: {} } }),
+  {
+    projectId: process.env.MCPAY_PROJECT_ID!,
+    apiSecret:  process.env.MCPAY_API_SECRET!,
+    pricing: {
+      search_web:     { type: "per_call", amountUsd: 0.01 },
+      generate_image: { type: "per_call", amountUsd: 0.05 },
+      ping:           { type: "free" },
+    },
   },
+);
+
+server.setRequestHandler(CallToolRequestSchema, async (req) => {
+  // your existing tool dispatch — no MCPay boilerplate inside.
 });
 ```
 
-That's it. Customers paste an MCPay-issued key into their MCP client config, calls get metered, you get paid monthly.
+That's it. The wrapper intercepts every CallTool request, gates paid tools on
+the customer's MCPay key, meters usage, and returns structured error
+responses on missing/invalid keys. Customers paste an MCPay-issued key into
+their MCP client config — calls get metered, you get paid monthly.
 
 ## Pricing (Platform)
 
@@ -85,10 +92,10 @@ mcpay/
 - [x] Postgres/Supabase data layer + RLS schema
 - [x] Sliding-window rate limiting
 - [x] Auth scaffold (demo + Supabase modes)
-- [ ] Real Supabase Auth wiring (JWT verification, not unsafe decode)
-- [ ] Usage-based invoicing (Stripe metered billing → monthly invoice)
-- [ ] Per-customer monthly reset cron
-- [ ] Marketplace listing page (discoverability)
+- [x] Real Supabase Auth wiring (magic-link login + verified-JWT HttpOnly cookies)
+- [x] Usage-based invoicing (monthly cron: one finalized invoice per customer, hosted invoice email via Stripe)
+- [x] Per-customer monthly reset cron
+- [x] Marketplace listing page (`/marketplace` index + per-project pages, ranked by 30d revenue)
 - [ ] Webhook system for *author* usage events
 
 ## Getting Started
