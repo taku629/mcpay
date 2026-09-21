@@ -5,6 +5,7 @@ import type {
   ProjectRecord,
   Repository,
   UsageRecord,
+  UsageIngestResult,
 } from "./repository.js";
 
 class Store {
@@ -154,6 +155,22 @@ export class InMemoryRepository implements Repository {
   // --- Usage -------------------------------------------------------------
   async recordUsage(record: UsageRecord): Promise<void> {
     store.usage.push(record);
+  }
+
+  async ingestUsage(record: UsageRecord): Promise<UsageIngestResult> {
+    if (store.usage.some((event) => event.id === record.id)) return "duplicate";
+    const key = store.customerKeys.get(record.apiKey);
+    if (!key) return "unknown_key";
+    if (key.projectId !== record.projectId) return "wrong_project";
+    if (key.revokedAt) return "revoked";
+    if (
+      key.monthlyBudgetUsd !== undefined &&
+      key.consumedThisMonthUsd + record.amountUsd > key.monthlyBudgetUsd
+    ) return "budget_exceeded";
+    // No await points: this mutation is atomic within the JavaScript event loop.
+    store.usage.push(record);
+    key.consumedThisMonthUsd += record.amountUsd;
+    return "recorded";
   }
 
   async recentUsageForProject(projectId: string, limit = 50): Promise<UsageRecord[]> {

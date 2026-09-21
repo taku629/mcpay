@@ -5,6 +5,7 @@ import type {
   ProjectRecord,
   Repository,
   UsageRecord,
+  UsageIngestResult,
 } from "./repository.js";
 
 // Supabase-backed implementation. Uses the REST API via fetch so we don't pull
@@ -277,6 +278,18 @@ export class SupabaseRepository implements Repository {
         timestamp: record.timestamp,
       }),
     });
+  }
+
+  async ingestUsage(record: UsageRecord): Promise<UsageIngestResult> {
+    const result = await rest<UsageIngestResult>("rpc/ingest_usage_event", {
+      method: "POST",
+      body: JSON.stringify({
+        p_id: record.id, p_project_id: record.projectId, p_api_key: record.apiKey,
+        p_tool_name: record.toolName, p_amount_usd: record.amountUsd,
+        p_tokens: record.tokens ?? null, p_timestamp: record.timestamp,
+      }),
+    });
+    return result;
   }
 
   async recentUsageForProject(projectId: string, limit = 50): Promise<UsageRecord[]> {

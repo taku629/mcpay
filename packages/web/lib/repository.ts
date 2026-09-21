@@ -41,6 +41,14 @@ export interface UsageRecord {
   timestamp: string;
 }
 
+export type UsageIngestResult =
+  | "recorded"
+  | "duplicate"
+  | "unknown_key"
+  | "revoked"
+  | "wrong_project"
+  | "budget_exceeded";
+
 // One row per (project, customer, month) the aggregate-invoices cron has
 // already processed. Lets us safely re-run the cron — if a run already
 // exists, we skip without double-billing.
@@ -85,6 +93,8 @@ export interface Repository {
 
   // Usage
   recordUsage(record: UsageRecord): Promise<void>;
+  /** Atomically validates the key, enforces budget, records usage, and increments consumption. */
+  ingestUsage(record: UsageRecord): Promise<UsageIngestResult>;
   recentUsageForProject(projectId: string, limit?: number): Promise<UsageRecord[]>;
 
   // Cron-driven operations.
@@ -115,10 +125,10 @@ export async function getRepository(): Promise<Repository> {
   if (cached) return cached;
 
   if (process.env.MCPAY_BACKEND === "supabase") {
-    const { SupabaseRepository } = await import("./repository.supabase.js");
+    const { SupabaseRepository } = await import("./repository.supabase");
     cached = new SupabaseRepository();
   } else {
-    const { InMemoryRepository } = await import("./repository.memory.js");
+    const { InMemoryRepository } = await import("./repository.memory");
     cached = new InMemoryRepository();
   }
   return cached;

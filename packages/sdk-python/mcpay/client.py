@@ -17,7 +17,7 @@ class MCPayClient:
 
     def __init__(self, config: MCPayConfig, *, httpx_client: Optional[httpx.AsyncClient] = None):
         self._config = config
-        self._http = httpx_client or httpx.AsyncClient(timeout=httpx.Timeout(5.0))
+        self._http = httpx_client or httpx.AsyncClient(timeout=httpx.Timeout(config.timeout_seconds))
         self._owns_client = httpx_client is None
         self._verify_cache: dict[str, tuple[VerifyKeyResult, float]] = {}
 
@@ -44,18 +44,19 @@ class MCPayClient:
             return cached[0]
 
         try:
-            res = await self._http.post(
-                f"{self._config.endpoint}/v1/verify",
-                headers=self._headers(),
-                json={"projectId": self._config.project_id, "apiKey": api_key},
-            )
-        except httpx.HTTPError as e:
+            res = await self._request("/v1/verify", {"projectId": self._config.project_id, "apiKey": api_key})
+        except (httpx.HTTPError, ValueError) as e:
             return self._handle_failure(f"network: {e}")
 
         if res.status_code != 200:
             return self._handle_failure(f"verify HTTP {res.status_code}")
 
-        data = res.json()
+        try:
+            data = res.json()
+            if not isinstance(data, dict) or not isinstance(data.get("ok"), bool):
+                raise ValueError("missing boolean ok")
+        except (ValueError, TypeError) as e:
+            return self._handle_failure(f"verify malformed response: {e}")
         result = VerifyKeyResult(
             ok=bool(data.get("ok")),
             customer_id=data.get("customerId"),
@@ -67,10 +68,8 @@ class MCPayClient:
 
     async def record_usage(self, event: UsageEvent) -> None:
         try:
-            await self._http.post(
-                f"{self._config.endpoint}/v1/usage",
-                headers=self._headers(),
-                json={
+            await self._request(
+                "/v1/usage", {
                     "projectId": event.project_id,
                     "apiKey": event.api_key,
                     "toolName": event.tool_name,
@@ -83,6 +82,24 @@ class MCPayClient:
         except httpx.HTTPError:
             # metering is fire-and-forget; failures must not block tool execution
             pass
+
+    async def _request(self, path: str, payload: dict) -> httpx.Response:
+        response: Optional[httpx.Response] = None
+        for attempt in range(self._config.max_retries + 1):
+            try:
+                response = await self._http.post(
+                    f"{self._config.endpoint}{path}", headers=self._headers(), json=payload
+                )
+            except httpx.HTTPError:
+                if attempt == self._config.max_retries:
+                    raise
+                continue
+            if response.status_code != 429 and response.status_code < 500:
+                return response
+            if attempt == self._config.max_retries:
+                return response
+        assert response is not None
+        return response
 
     def _handle_failure(self, reason: str) -> VerifyKeyResult:
         if self._config.fail_open:
