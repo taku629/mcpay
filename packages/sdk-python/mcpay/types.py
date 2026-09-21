@@ -42,6 +42,8 @@ class MCPayConfig:
     pricing: dict[str, ToolPricing] = field(default_factory=dict)
     endpoint: str = "https://api.mcpay.dev"
     fail_open: bool = False
+    timeout_seconds: float = 5.0
+    max_retries: int = 2
 
 
 @dataclass

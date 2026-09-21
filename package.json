@@ -2,7 +2,7 @@
   "name": "mcpay",
   "version": "0.1.0",
   "private": true,
-  "description": "Drop-in monetization for MCP servers — Stripe-backed billing, metering, and dashboards",
+  "description": "Drop-in monetization for MCP servers \u2014 Stripe-backed billing, metering, and dashboards",
   "workspaces": [
     "packages/*",
     "examples/*"
@@ -10,7 +10,8 @@
   "scripts": {
     "build:sdk": "npm run build --workspace=@mcpay/sdk",
     "dev:web": "npm run dev --workspace=@mcpay/web",
-    "build:web": "npm run build --workspace=@mcpay/web"
+    "build:web": "npm run build --workspace=@mcpay/web",
+    "test:load": "node packages/web/lib/load-test.mjs"
   },
   "license": "MIT",
   "repository": {

@@ -24,6 +24,10 @@ export interface MCPayConfig {
   pricing: Record<string, ToolPricing>;
   endpoint?: string;
   failOpen?: boolean;
+  /** Per-request deadline. Defaults to 5 seconds. */
+  timeoutMs?: number;
+  /** Retries for network errors, 429, and 5xx responses. Defaults to 2. */
+  maxRetries?: number;
   /**
    * Extract the customer's MCPay key from an incoming CallTool request.
    * Default: `params.arguments._mcpayKey` (string) → `params._meta["x-mcpay-key"]`.

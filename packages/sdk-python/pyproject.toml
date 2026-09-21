@@ -26,5 +26,4 @@ Issues   = "https://github.com/taku629/mcpay/issues"
 packages = ["mcpay"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]

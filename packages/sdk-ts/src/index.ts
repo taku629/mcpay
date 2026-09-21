@@ -67,7 +67,7 @@ export function createMCPayMiddleware<T>(config: MCPayConfig): WrappedHandler<T>
     if (pricing) {
       const amount = priceCall(pricing, invocation.tokens);
       if (amount > 0 && invocation.apiKey) {
-        void client.recordUsage({
+        await client.recordUsage({
           apiKey: invocation.apiKey,
           toolName: invocation.toolName,
           amountUsd: amount,
