@@ -101,3 +101,30 @@ test("MCPayError is exported for downstream catch sites", () => {
   const err = new MCPayError("x", "y");
   assert.equal(err.code, "y");
 });
+
+test("mocked paid workflow verifies, invokes, meters, and reports", async () => {
+  const originalFetch = globalThis.fetch;
+  const usage: Array<Record<string, unknown>> = [];
+  globalThis.fetch = async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/v1/verify") return Response.json({ ok: true, customerId: "cust_1", remainingBudgetUsd: 1 });
+    if (path === "/v1/usage") {
+      usage.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return Response.json({ ok: true });
+    }
+    return new Response(null, { status: 404 });
+  };
+  try {
+    const server = makeFakeServer();
+    wrapMCPServer(server, { projectId: "prj_e2e", apiSecret: "secret", endpoint: "https://mock.local", pricing: { search: { type: "per_call", amountUsd: 0.25 } }, maxRetries: 0 });
+    server.setRequestHandler(CallToolSchema, async () => ({ content: [{ type: "text", text: "result" }] }));
+    const response = await server.handlers.get(CallToolSchema)!({ params: { name: "search", arguments: { _mcpayKey: "mcpay_test" } } });
+    assert.equal((response as any).content[0].text, "result");
+    assert.equal(usage.length, 1);
+    assert.equal(usage[0].amountUsd, 0.25);
+    assert.match(String(usage[0].requestId), /^req_/);
+    assert.equal(usage.reduce((sum, row) => sum + Number(row.amountUsd), 0), 0.25);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

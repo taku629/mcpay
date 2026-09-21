@@ -9,8 +9,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "missing_bearer" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as Partial<UsageRecord> | null;
-  if (!body?.projectId || !body.apiKey || !body.toolName || typeof body.amountUsd !== "number") {
+  const body = (await request.json().catch(() => null)) as
+    | (Partial<UsageRecord> & { requestId?: string }) | null;
+  const requestId = body?.requestId ?? body?.id;
+  if (
+    !body?.projectId || !body.apiKey || !body.toolName || !requestId ||
+    !/^req_[A-Za-z0-9_-]{8,128}$/.test(requestId) ||
+    typeof body.amountUsd !== "number" || !Number.isFinite(body.amountUsd) ||
+    body.amountUsd <= 0 || body.amountUsd > 10_000 ||
+    (body.tokens !== undefined && (!Number.isSafeInteger(body.tokens) || body.tokens < 0))
+  ) {
     return NextResponse.json({ ok: false, reason: "invalid_payload" }, { status: 400 });
   }
 
@@ -33,16 +41,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "bad_secret" }, { status: 401 });
   }
 
-  await repo.incrementConsumption(body.apiKey, body.amountUsd);
-  await repo.recordUsage({
-    id: `u_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+  const outcome = await repo.ingestUsage({
+    id: requestId,
     projectId: body.projectId,
     apiKey: body.apiKey,
     toolName: body.toolName,
     amountUsd: body.amountUsd,
     tokens: body.tokens,
-    timestamp: body.timestamp ?? new Date().toISOString(),
+    // Server receipt time defines billing windows; callers cannot backdate usage.
+    timestamp: new Date().toISOString(),
   });
+
+  if (outcome === "duplicate") return NextResponse.json({ ok: true, duplicate: true });
+  if (outcome === "budget_exceeded") {
+    return NextResponse.json({ ok: false, reason: outcome }, { status: 409 });
+  }
+  if (outcome !== "recorded") {
+    const status = outcome === "revoked" ? 403 : 404;
+    return NextResponse.json({ ok: false, reason: outcome }, { status });
+  }
 
   return NextResponse.json({ ok: true });
 }
